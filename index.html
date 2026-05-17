@@ -1794,35 +1794,110 @@ function openAddModal(){
   document.getElementById('add-modal').classList.add('open');
 }
 function closeModal(){document.getElementById('add-modal').classList.remove('open');}
-function saveRound(){
-  const isLotto=currentLottery==='lotto';
-  const s=isLotto?lottoStats:pensionStats;
-  const next=(s?.lat||0)+1;
-  if(isLotto){
-    const nums=[];
-    for(let i=1;i<=6;i++){const v=parseInt(document.getElementById('ln'+i).value,10);if(isNaN(v)||v<1||v>45){alert(i+'번째 번호: 1~45');return;}nums.push(v);}
-    const bonus=parseInt(document.getElementById('lbonus').value,10);
-    if(isNaN(bonus)||bonus<1||bonus>45){alert('보너스: 1~45');return;}
-    if(new Set(nums).size!==6){alert('중복 번호');return;}
-    if(nums.includes(bonus)){alert('보너스 중복');return;}
-    const nr={round:next,numbers:nums.sort((a,b)=>a-b),bonus};
+
+async function saveRound() {
+  const isLotto = currentLottery === 'lotto';
+  const s       = isLotto ? lottoStats : pensionStats;
+  const next    = (s?.lat || 0) + 1;
+
+  // ── 입력값 검증 ────────────────────────────
+  if (isLotto) {
+    const nums = [];
+    for (let i=1; i<=6; i++) {
+      const v = parseInt(document.getElementById('ln'+i).value, 10);
+      if (isNaN(v) || v<1 || v>45) { alert(i+'번째 번호: 1~45 사이여야 합니다'); return; }
+      nums.push(v);
+    }
+    const bonus = parseInt(document.getElementById('lbonus').value, 10);
+    if (isNaN(bonus) || bonus<1 || bonus>45) { alert('보너스: 1~45 사이여야 합니다'); return; }
+    if (new Set(nums).size !== 6) { alert('당첨 번호에 중복이 있습니다'); return; }
+    if (nums.includes(bonus))     { alert('보너스 번호가 당첨 번호와 중복됩니다'); return; }
+
+    const nr = { round: next, numbers: nums.sort((a,b)=>a-b), bonus };
     lottoRounds.push(nr);
-    const extras=LS.get('lotto_extra')||[];extras.push(nr);LS.set('lotto_extra',extras);
-    lottoStats=computeLottoStats(lottoRounds);
-  }else{
-    const g=parseInt(document.getElementById('pg').value,10);
-    if(isNaN(g)||g<1||g>5){alert('조: 1~5');return;}
-    const digits=[];
-    for(let i=1;i<=6;i++){const v=parseInt(document.getElementById('pd'+i).value,10);if(isNaN(v)||v<0||v>9){alert(i+'번째: 0~9');return;}digits.push(v);}
-    const nr={round:next,group:g,digits};
+    const extras = LS.get('lotto_extra') || [];
+    extras.push(nr);
+    LS.set('lotto_extra', extras);
+    lottoStats = computeLottoStats(lottoRounds);
+
+  } else {
+    const g = parseInt(document.getElementById('pg').value, 10);
+    if (isNaN(g) || g<1 || g>5) { alert('조: 1~5 사이여야 합니다'); return; }
+    const digits = [];
+    for (let i=1; i<=6; i++) {
+      const v = parseInt(document.getElementById('pd'+i).value, 10);
+      if (isNaN(v) || v<0 || v>9) { alert(i+'번째 자리: 0~9 사이여야 합니다'); return; }
+      digits.push(v);
+    }
+    const nr = { round: next, group: g, digits };
     pensionRounds.push(nr);
-    const extras=LS.get('pension_extra')||[];extras.push(nr);LS.set('pension_extra',extras);
-    pensionStats=computePensionStats(pensionRounds);
+    const extras = LS.get('pension_extra') || [];
+    extras.push(nr);
+    LS.set('pension_extra', extras);
+    pensionStats = computePensionStats(pensionRounds);
   }
+
   closeModal();
   refreshAll();
-  updateBtnState();
-  alert(next+'회차 추가 완료! 🎉');
+
+  // ── 토큰 있으면 즉시 GitHub push ───────────
+  const token = getToken();
+  if (token) {
+    // 버튼을 잠깐 "저장 중" 상태로
+    const btn   = document.getElementById('update-btn');
+    const label = document.getElementById('update-btn-label');
+    const icon  = document.getElementById('update-btn-icon');
+    btn.classList.add('loading');
+    label.textContent = '저장 중...';
+    icon.textContent  = '⟳';
+
+    try {
+      if (isLotto) {
+        const extras = LS.get('lotto_extra') || [];
+        const remote = await getFile(GH_FILES.lotto, token).catch(() => null);
+        const merged = mergeRounds(remote ? JSON.parse(remote) : [], extras);
+        await putFile(
+          GH_FILES.lotto,
+          JSON.stringify(merged, null, 2),
+          token,
+          `로또 ${next}회차 추가`
+        );
+      } else {
+        const extras = LS.get('pension_extra') || [];
+        const remote = await getFile(GH_FILES.pension, token).catch(() => null);
+        const merged = mergeRounds(remote ? JSON.parse(remote) : [], extras);
+        await putFile(
+          GH_FILES.pension,
+          JSON.stringify(merged, null, 2),
+          token,
+          `연금복권 ${next}회차 추가`
+        );
+      }
+
+      // push 성공 → localStorage extra 비우기
+      LS.set(isLotto ? 'lotto_extra' : 'pension_extra', []);
+      showToast(`☁ ${next}회차 GitHub 저장 완료`);
+
+    } catch (err) {
+      // push 실패해도 localStorage에는 남아있으므로 데이터 유실 없음
+      // 나중에 최신화 버튼으로 다시 시도 가능
+      console.warn('[saveRound push]', err.message);
+      if (err.message.includes('401')) {
+        LS.set('gh_token', '');
+        showToast('⚠️ GitHub 토큰 만료 — 최신화에서 재설정해주세요', 3500);
+      } else {
+        showToast(`⚠️ GitHub 저장 실패 (로컬 저장됨) — 나중에 최신화 버튼을 눌러주세요`, 3500);
+      }
+    } finally {
+      btn.classList.remove('loading');
+      updateBtnState();
+    }
+
+  } else {
+    // 토큰 없음 → localStorage만 저장, 버튼 상태 업데이트
+    updateBtnState();
+    showToast(`✓ ${next}회차 저장됨 — 최신화 버튼으로 GitHub에 동기화하세요`, 3000);
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
