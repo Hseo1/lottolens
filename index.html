@@ -7,7 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="LottoLens">
 <meta name="theme-color" content="#ffffff">
-<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <title>LottoLens</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -1169,6 +1171,33 @@ const LS = {
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  날짜 유틸
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 로또: 매주 토요일, 1회 = 2002-12-07
+// 연금720+: 매주 목요일, 1회 = 2020-05-07
+const LOTTO_START   = new Date('2002-12-07T00:00:00+09:00');
+const PENSION_START = new Date('2020-05-07T00:00:00+09:00');
+
+function getDrawDate(round, isLotto) {
+  const start = isLotto ? LOTTO_START : PENSION_START;
+  const ms = start.getTime() + (round - 1) * 7 * 24 * 60 * 60 * 1000;
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}.${m}.${day}`;
+}
+
+function getDrawDateShort(round, isLotto) {
+  const start = isLotto ? LOTTO_START : PENSION_START;
+  const ms = start.getTime() + (round - 1) * 7 * 24 * 60 * 60 * 1000;
+  const d = new Date(ms);
+  const m = d.getMonth()+1;
+  const day = d.getDate();
+  return `${m}/${day}`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  BALL UTILS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function ballBg(n) {
@@ -1295,42 +1324,47 @@ function lottoReason(ns,mode,s){
 //  PENSION RECOMMENDATION
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const PENSION_MODES = [
-  {key:'POSITIONAL', title:'자리별 최빈', desc:'각 자리 최빈 숫자',  icon:'📍'},
-  {key:'HIGH_GROUP', title:'고빈도 조',   desc:'가장 자주 나온 조',  icon:'🏆'},
-  {key:'BALANCE',    title:'균형',         desc:'각 자리 상위 3개',   icon:'⚖️'},
-  {key:'RANDOM',     title:'랜덤',         desc:'완전 무작위',         icon:'🎲'},
+  {key:'POSITIONAL', title:'자리별 최빈', desc:'각 자리 최빈 숫자',    icon:'📍'},
+  {key:'LOW_FREQ',   title:'역발상',      desc:'덜 나온 숫자 위주',    icon:'❄️'},
+  {key:'BALANCE',    title:'균형',         desc:'각 자리 상위 3개 중 랜덤', icon:'⚖️'},
+  {key:'RANDOM',     title:'랜덤',         desc:'완전 무작위',           icon:'🎲'},
 ];
 function genPensionSet(mode, s) {
-  let group, digits;
-  if (mode === 'HIGH_GROUP') {
-    group = +Object.entries(s.gm).sort((a,b)=>b[1]-a[1])[0][0];
-  } else if (mode === 'RANDOM') {
-    group = Math.ceil(Math.random()*5);
-  } else {
-    group = Math.ceil(Math.random()*5);
-  }
+  // 연금복권은 조를 따로 고르지 않음 — 번호 하나로 전 조 구매가 일반적
+  // 따라서 조는 항상 랜덤 (통계 의미 없음)
+  const group = Math.ceil(Math.random() * 5);
+  let digits;
   if (mode === 'POSITIONAL') {
+    // 각 자리 최빈 숫자
     digits = s.bestPerPos.map(pos => pos[0].d);
-  } else if (mode === 'BALANCE') {
+  } else if (mode === 'LOW_FREQ') {
+    // 각 자리에서 덜 나온 숫자 (하위 3개 중 랜덤)
     digits = s.bestPerPos.map(pos => {
-      const top3 = pos.slice(0,3);
-      return top3[Math.floor(Math.random()*top3.length)].d;
+      const bot3 = pos.slice(-3);
+      return bot3[Math.floor(Math.random() * bot3.length)].d;
+    });
+  } else if (mode === 'BALANCE') {
+    // 각 자리 상위 3개 중 랜덤
+    digits = s.bestPerPos.map(pos => {
+      const top3 = pos.slice(0, 3);
+      return top3[Math.floor(Math.random() * top3.length)].d;
     });
   } else {
-    digits = Array.from({length:6},()=>Math.floor(Math.random()*10));
+    // RANDOM
+    digits = Array.from({length: 6}, () => Math.floor(Math.random() * 10));
   }
   return {group, digits};
 }
 function pensionReason(set, mode, s) {
-  const sum = set.digits.reduce((a,b)=>a+b,0);
+  const sum    = set.digits.reduce((a,b) => a+b, 0);
   const numStr = set.digits.join('');
   const m = {
-    POSITIONAL: `자리별 최빈값 조합 · ${set.group}조 ${numStr} · 숫자합 ${sum}`,
-    HIGH_GROUP: `최다 출현 ${set.group}조(${s.gm[set.group]}회) · ${numStr} · 숫자합 ${sum}`,
-    BALANCE: `자리별 상위 3개 중 랜덤 · ${set.group}조 ${numStr} · 숫자합 ${sum}`,
-    RANDOM: `완전 랜덤 · ${set.group}조 ${numStr} · 숫자합 ${sum}`
+    POSITIONAL: `자리별 최빈값 조합 · ${numStr} · 숫자합 ${sum}`,
+    LOW_FREQ:   `역발상 (덜 나온 숫자) · ${numStr} · 숫자합 ${sum}`,
+    BALANCE:    `자리별 상위 3개 중 랜덤 · ${numStr} · 숫자합 ${sum}`,
+    RANDOM:     `완전 랜덤 · ${numStr} · 숫자합 ${sum}`,
   };
-  return m[mode]||'';
+  return m[mode] || '';
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1392,12 +1426,12 @@ function renderHome() {
           <div class="hero-stat-lbl">총 회차</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-val">${latest}</div>
-          <div class="hero-stat-lbl">최신 회차</div>
+          <div class="hero-stat-val">${latest}회</div>
+          <div class="hero-stat-lbl">${getDrawDate(latest, isLotto)}</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-val">${next}</div>
-          <div class="hero-stat-lbl">다음 입력</div>
+          <div class="hero-stat-val">${next}회</div>
+          <div class="hero-stat-lbl">${getDrawDate(next, isLotto)} 예정</div>
         </div>
       </div>
     </div>
@@ -1414,26 +1448,32 @@ function renderHome() {
   }
   document.getElementById('recent-list').innerHTML = recent.map((r,i) => {
     if (isLotto) {
-      const sum = r.numbers.reduce((a,b)=>a+b,0);
+      const sum  = r.numbers.reduce((a,b) => a+b, 0);
+      const date = getDrawDate(r.round, true);
       return `<div class="round-card">
         <div class="round-card-header">
           <div style="display:flex;align-items:center;gap:8px">
             <span class="round-num">${r.round}회</span>
             ${i===0?'<span class="chip chip-blue">최신</span>':''}
           </div>
-          <span class="round-sum">합계 ${sum}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:var(--text-4);font-weight:500">${date}</span>
+            <span class="round-sum">합계 ${sum}</span>
+          </div>
         </div>
-        ${ballRow(r.numbers,r.bonus,'xs')}
+        ${ballRow(r.numbers, r.bonus, 'xs')}
       </div>`;
     } else {
+      const date = getDrawDate(r.round, false);
       return `<div class="p-round-card">
         <div class="round-card-header">
           <div style="display:flex;align-items:center;gap:8px">
             <span class="round-num">${r.round}회</span>
             ${i===0?'<span class="chip chip-purple">최신</span>':''}
           </div>
+          <span style="font-size:11px;color:var(--text-4);font-weight:500">${date}</span>
         </div>
-        ${pensionDigits(r.digits,r.group,'sm')}
+        ${pensionDigits(r.digits, r.group, 'sm')}
       </div>`;
     }
   }).join('');
@@ -1664,43 +1704,50 @@ function renderHistory() {
 
   // search placeholder
   document.getElementById('search-input').placeholder = isLotto ? '번호 검색 (1~45)' : '숫자 검색 (0~9)';
-  document.getElementById('hist-col-sum').textContent = isLotto ? '합계' : '조';
+  document.getElementById('hist-col-sum').textContent  = isLotto ? '합계' : '조';
 
-  let filtered=sorted;
-  const sb=document.getElementById('search-result-bar');
-  if(searchNum!==null){
-    if(isLotto){
-      filtered=sorted.filter(r=>r.numbers.includes(searchNum));
-      sb.style.display='flex';
-      sb.className='search-result-bar';
-      sb.innerHTML=`${ball(searchNum,'xs')}<span><b style="color:var(--primary)">${searchNum}번</b> ${filtered.length}회 출현 (${rounds.length>0?(filtered.length/rounds.length*100).toFixed(1):0}%)</span>`;
-    }else{
-      filtered=sorted.filter(r=>r.digits.includes(searchNum));
-      sb.style.display='flex';
-      sb.className='search-result-bar purple';
-      sb.innerHTML=`<span style="font-size:18px;font-weight:800;color:var(--pension-purple)">${searchNum}</span><span><b style="color:var(--pension-purple)">${searchNum}</b> 포함 ${filtered.length}회 (${rounds.length>0?(filtered.length/rounds.length*100).toFixed(1):0}%)</span>`;
+  let filtered = sorted;
+  const sb = document.getElementById('search-result-bar');
+  if (searchNum !== null) {
+    if (isLotto) {
+      filtered = sorted.filter(r => r.numbers.includes(searchNum));
+      sb.style.display = 'flex';
+      sb.className = 'search-result-bar';
+      sb.innerHTML = `${ball(searchNum,'xs')}<span><b style="color:var(--primary)">${searchNum}번</b> ${filtered.length}회 출현 (${rounds.length>0?(filtered.length/rounds.length*100).toFixed(1):0}%)</span>`;
+    } else {
+      filtered = sorted.filter(r => r.digits.includes(searchNum));
+      sb.style.display = 'flex';
+      sb.className = 'search-result-bar purple';
+      sb.innerHTML = `<span style="font-size:18px;font-weight:800;color:var(--pension-purple)">${searchNum}</span><span><b style="color:var(--pension-purple)">${searchNum}</b> 포함 ${filtered.length}회 (${rounds.length>0?(filtered.length/rounds.length*100).toFixed(1):0}%)</span>`;
     }
-  }else{sb.style.display='none';}
+  } else { sb.style.display = 'none'; }
 
-  const latestRound=sorted[0]?.round;
-  if(!filtered.length){
-    document.getElementById('hist-list').innerHTML=`<div class="empty"><div class="empty-emoji">🔍</div><div class="empty-title">결과 없음</div></div>`;
+  const latestRound = sorted[0]?.round;
+  if (!filtered.length) {
+    document.getElementById('hist-list').innerHTML = `<div class="empty"><div class="empty-emoji">🔍</div><div class="empty-title">결과 없음</div></div>`;
     return;
   }
-  document.getElementById('hist-list').innerHTML=filtered.map(r=>{
-    const isLatest=r.round===latestRound;
-    const hit=searchNum!==null;
-    if(isLotto){
-      const sum=r.numbers.reduce((a,b)=>a+b,0);
+  document.getElementById('hist-list').innerHTML = filtered.map(r => {
+    const isLatest = r.round === latestRound;
+    const hit      = searchNum !== null;
+    const dateStr  = getDrawDateShort(r.round, isLotto);
+    if (isLotto) {
+      const sum = r.numbers.reduce((a,b) => a+b, 0);
       return `<div class="hist-row ${hit?'hit':''} ${isLatest?'latest':''}">
-        <span class="hist-round ${isLatest?'latest':''}">${r.round}회</span>
-        <div class="hist-nums">${ballRow(r.numbers,r.bonus,'xs')}</div>
+        <div style="width:54px;flex-shrink:0">
+          <div class="hist-round ${isLatest?'latest':''}">${r.round}회</div>
+          <div style="font-size:9px;color:var(--text-4);font-weight:500;margin-top:1px">${dateStr}</div>
+        </div>
+        <div class="hist-nums">${ballRow(r.numbers, r.bonus, 'xs')}</div>
         <span class="hist-sum ${hit?'hit':''}">${sum}</span>
       </div>`;
-    }else{
+    } else {
       return `<div class="hist-row ${hit?'hit purple':''} ${isLatest?'latest':''}">
-        <span class="hist-round ${isLatest?'latest purple':''}">${r.round}회</span>
-        <div class="hist-nums">${pensionDigits(r.digits,r.group,'xs')}</div>
+        <div style="width:54px;flex-shrink:0">
+          <div class="hist-round ${isLatest?'latest purple':''}">${r.round}회</div>
+          <div style="font-size:9px;color:var(--text-4);font-weight:500;margin-top:1px">${dateStr}</div>
+        </div>
+        <div class="hist-nums">${pensionDigits(r.digits, r.group, 'xs')}</div>
         <span class="hist-sum ${hit?'hit purple':''}">${r.group}조</span>
       </div>`;
     }
