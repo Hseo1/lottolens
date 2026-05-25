@@ -714,61 +714,7 @@
       }
     }
 
-    #update-btn {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 7px 11px;
-      border-radius: var(--r-full);
-      background: var(--gray-100);
-      color: var(--text-2);
-      font-size: 12px;
-      font-weight: 700;
-      white-space: nowrap;
-      flex-shrink: 0;
-      margin-right: 4px;
-      transition: all 0.15s;
-      border: 1.5px solid var(--border);
-    }
-
-    #update-btn:active {
-      background: var(--gray-200);
-      transform: scale(0.96);
-    }
-
-    #update-btn.has-new {
-      background: var(--blue-50);
-      border-color: var(--primary);
-      color: var(--primary);
-    }
-
-    #update-btn.loading {
-      opacity: 0.6;
-      pointer-events: none;
-    }
-
-    #update-btn-icon {
-      font-size: 13px;
-    }
-
-    /* 최신화 알림 배지 */
-    .update-badge {
-      position: absolute;
-      top: -3px;
-      right: -3px;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--primary);
-      border: 1.5px solid white;
-    }
-
-    #update-btn-wrap {
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    /* 최신화 결과 토스트 */
+    /* ━━━ TOAST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     #toast {
       position: absolute;
       bottom: 90px;
@@ -1801,10 +1747,6 @@
         <button class="topnav-tab active" onclick="switchLottery('lotto')">로또 6/45</button>
         <button class="topnav-tab" onclick="switchLottery('pension')">연금복권 720+</button>
       </div>
-      <button id="update-btn" onclick="onUpdateBtnClick()" title="GitHub에 저장">
-        <span id="update-btn-icon">☁</span>
-        <span id="update-btn-label">최신화</span>
-      </button>
     </div>
 
     <!-- ====== HOME ====== -->
@@ -1915,7 +1857,7 @@
         </div>
         <div class="btn-row">
           <button class="btn-cancel" onclick="closeTokenModal()">취소</button>
-          <button class="btn-confirm" onclick="saveTokenAndSync()">저장 후 최신화</button>
+          <button class="btn-confirm" onclick="saveTokenAndSync()">저장 후 동기화</button>
         </div>
       </div>
     </div>
@@ -2931,14 +2873,6 @@
       // ── 토큰 있으면 즉시 GitHub push ───────────
       const token = getToken();
       if (token) {
-        // 버튼을 잠깐 "저장 중" 상태로
-        const btn = document.getElementById('update-btn');
-        const label = document.getElementById('update-btn-label');
-        const icon = document.getElementById('update-btn-icon');
-        btn.classList.add('loading');
-        label.textContent = '저장 중...';
-        icon.textContent = '⟳';
-
         try {
           if (isLotto) {
             const extras = LS.get('lotto_extra') || [];
@@ -2967,24 +2901,19 @@
           showToast(`☁ ${next}회차 GitHub 저장 완료`);
 
         } catch (err) {
-          // push 실패해도 localStorage에는 남아있으므로 데이터 유실 없음
-          // 나중에 최신화 버튼으로 다시 시도 가능
           console.warn('[saveRound push]', err.message);
           if (err.message.includes('401')) {
             LS.set('gh_token', '');
-            showToast('⚠️ GitHub 토큰 만료 — 최신화에서 재설정해주세요', 3500);
+            showToast('⚠️ GitHub 토큰 만료 — 설정에서 재입력해주세요', 3500);
           } else {
-            showToast(`⚠️ GitHub 저장 실패 (로컬 저장됨) — 나중에 최신화 버튼을 눌러주세요`, 3500);
+            showToast(`⚠️ GitHub 저장 실패 (로컬 저장됨)`, 3000);
           }
-        } finally {
-          btn.classList.remove('loading');
-          updateBtnState();
         }
 
       } else {
-        // 토큰 없음 → localStorage만 저장, 버튼 상태 업데이트
-        updateBtnState();
-        showToast(`✓ ${next}회차 저장됨 — 최신화 버튼으로 GitHub에 동기화하세요`, 3000);
+        // 토큰 없음 → localStorage만 저장 후 토큰 모달 안내
+        showToast(`✓ ${next}회차 저장됨 — GitHub 동기화를 위해 토큰을 설정해주세요`, 3000);
+        setTimeout(openTokenModal, 1200);
       }
     }
 
@@ -3163,7 +3092,6 @@
       renderHome();
       renderModeGrid();
       renderPurchaseSection();
-      updateBtnState();
 
       // 스플래시 해제
       splash.style.transition = 'opacity 0.35s';
@@ -3203,15 +3131,12 @@
           LS.set('pension_extra', []);
 
           refreshAll();
-          updateBtnState();
 
         } catch (err) {
-          // 백그라운드 실패는 조용히 처리 (앱 사용에는 지장 없음)
           console.warn('[Init GitHub pull]', err.message);
           if (err.message.includes('401')) {
             LS.set('gh_token', '');
-            updateBtnState();
-            showToast('⚠️ GitHub 토큰이 만료되었습니다. 최신화에서 재설정해주세요', 3500);
+            showToast('⚠️ GitHub 토큰이 만료되었습니다. 설정에서 재입력해주세요', 3500);
           }
         }
       }
@@ -3260,40 +3185,70 @@
       syncToGitHub();
     }
 
-    /** 최신화 버튼 클릭 */
-    function onUpdateBtnClick() {
-      if (!getToken()) { openTokenModal(); return; }
-      syncToGitHub();
-    }
+    /**
+     * 메인 동기화:
+     *  1. GitHub에서 기존 extra 데이터 pull
+     *  2. 로컬 추가분과 병합 (round 기준 중복 제거)
+     *  3. 병합 결과를 GitHub에 push
+     *  4. 로컬 메모리 & localStorage 업데이트
+     */
+    async function syncToGitHub() {
+      const token = getToken();
+      if (!token) { openTokenModal(); return; }
 
-    /** 최신화 버튼 상태 업데이트 */
-    function updateBtnState() {
-      const lottoExtras = LS.get('lotto_extra') || [];
-      const pensionExtras = LS.get('pension_extra') || [];
-      const hasNew = lottoExtras.length > 0 || pensionExtras.length > 0;
-      const hasToken = !!getToken();
-      const btn = document.getElementById('update-btn');
-      const icon = document.getElementById('update-btn-icon');
-      const label = document.getElementById('update-btn-label');
+      const lottoLocal = LS.get('lotto_extra') || [];
+      const pensionLocal = LS.get('pension_extra') || [];
 
-      btn.classList.toggle('has-new', hasNew);
-      if (!hasToken) {
-        icon.textContent = '🔑';
-        label.textContent = '토큰 설정';
-      } else if (hasNew) {
-        const total = lottoExtras.length + pensionExtras.length;
-        icon.textContent = `+${total}`;
-        label.textContent = '최신화';
-      } else {
-        icon.textContent = '☁';
-        label.textContent = '최신화';
+      try {
+        // ── 로또 동기화 ────────────────────────────
+        const lottoRemoteRaw = await getFile(GH_FILES.lotto, token);
+        const lottoRemote = lottoRemoteRaw ? JSON.parse(lottoRemoteRaw) : [];
+        const lottoMerged = mergeRounds(lottoRemote, lottoLocal);
+        const lottoChanged = lottoLocal.length > 0 || lottoRemote.length !== lottoMerged.length;
+
+        if (lottoChanged || !lottoRemoteRaw) {
+          await putFile(
+            GH_FILES.lotto,
+            JSON.stringify(lottoMerged, null, 2),
+            token,
+            `로또 ${lottoMerged.length > 0 ? lottoMerged[lottoMerged.length - 1].round + '회' : ''}회차 업데이트`
+          );
+        }
+
+        // ── 연금복권 동기화 ─────────────────────────
+        const pensionRemoteRaw = await getFile(GH_FILES.pension, token);
+        const pensionRemote = pensionRemoteRaw ? JSON.parse(pensionRemoteRaw) : [];
+        const pensionMerged = mergeRounds(pensionRemote, pensionLocal);
+        const pensionChanged = pensionLocal.length > 0 || pensionRemote.length !== pensionMerged.length;
+
+        if (pensionChanged || !pensionRemoteRaw) {
+          await putFile(
+            GH_FILES.pension,
+            JSON.stringify(pensionMerged, null, 2),
+            token,
+            `연금복권 ${pensionMerged.length > 0 ? pensionMerged[pensionMerged.length - 1].round + '회' : ''}회차 업데이트`
+          );
+        }
+
+        applyExtraRounds(lottoMerged, pensionMerged);
+        LS.set('lotto_extra', []);
+        LS.set('pension_extra', []);
+        refreshAll();
+
+        const syncedCount = lottoLocal.length + pensionLocal.length;
+        showToast(syncedCount > 0 ? `☁ ${syncedCount}개 회차 GitHub 저장 완료` : '☁ 최신 데이터로 동기화 완료');
+
+      } catch (err) {
+        console.error('[GitHub Sync]', err);
+        if (err.message.includes('401') || err.message.includes('Bad credentials')) {
+          LS.set('gh_token', '');
+          showToast('⚠️ 토큰이 유효하지 않습니다. 다시 설정해주세요', 3000);
+          setTimeout(openTokenModal, 1000);
+        } else {
+          showToast(`⚠️ 동기화 실패: ${err.message}`, 3500);
+        }
       }
     }
-
-    /**
-     * GitHub API: 파일의 현재 SHA를 가져옴 (업데이트에 필요)
-     * 파일이 없으면 null 반환
-     */
     async function getFileSha(path, token) {
       const res = await fetch(
         `${GH_API}/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`,
@@ -3364,15 +3319,6 @@
       const lottoLocal = LS.get('lotto_extra') || [];
       const pensionLocal = LS.get('pension_extra') || [];
 
-      // 로컬에 추가분이 없으면 pull만 해서 최신 반영
-      const hasPendingLocal = lottoLocal.length > 0 || pensionLocal.length > 0;
-
-      // 버튼 로딩 상태
-      const btn = document.getElementById('update-btn');
-      btn.classList.add('loading');
-      document.getElementById('update-btn-label').textContent = '동기화 중...';
-      document.getElementById('update-btn-icon').textContent = '⟳';
-
       try {
         // ── 로또 동기화 ────────────────────────────
         const lottoRemoteRaw = await getFile(GH_FILES.lotto, token);
@@ -3407,39 +3353,23 @@
           );
         }
 
-        // ── 로컬 메모리 업데이트 ────────────────────
-        // GitHub 데이터를 진실의 원천(source of truth)으로 사용
         applyExtraRounds(lottoMerged, pensionMerged);
-
-        // localStorage extra 비우기 (GitHub에 반영됐으므로)
         LS.set('lotto_extra', []);
         LS.set('pension_extra', []);
-
         refreshAll();
-        updateBtnState();
 
         const syncedCount = lottoLocal.length + pensionLocal.length;
-        if (syncedCount > 0) {
-          showToast(`☁ ${syncedCount}개 회차 GitHub 저장 완료`);
-        } else {
-          showToast('☁ 최신 데이터로 동기화 완료');
-        }
+        showToast(syncedCount > 0 ? `☁ ${syncedCount}개 회차 GitHub 저장 완료` : '☁ 최신 데이터로 동기화 완료');
 
       } catch (err) {
         console.error('[GitHub Sync]', err);
-
-        // 401: 토큰 만료/권한 없음
         if (err.message.includes('401') || err.message.includes('Bad credentials')) {
           LS.set('gh_token', '');
-          updateBtnState();
           showToast('⚠️ 토큰이 유효하지 않습니다. 다시 설정해주세요', 3000);
           setTimeout(openTokenModal, 1000);
         } else {
           showToast(`⚠️ 동기화 실패: ${err.message}`, 3500);
         }
-      } finally {
-        btn.classList.remove('loading');
-        updateBtnState();
       }
     }
 
