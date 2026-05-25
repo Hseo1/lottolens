@@ -1669,6 +1669,76 @@
       font-weight: 500;
     }
 
+    /* ━━━ UPDATE BANNER ━━━━━━━━━━━━━━━━━━━━━━━ */
+    #update-banner {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 8000;
+      background: var(--primary);
+      color: white;
+      padding: 12px 16px;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 12px rgba(59, 130, 246, 0.35);
+      animation: slideDown 0.3s ease both;
+    }
+
+    @keyframes slideDown {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    #update-banner.show {
+      display: flex;
+    }
+
+    #update-banner-text {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    #update-banner-btn {
+      background: white;
+      color: var(--primary);
+      border: none;
+      border-radius: var(--r-full);
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+      font-family: inherit;
+      transition: opacity 0.15s;
+    }
+
+    #update-banner-btn:active {
+      opacity: 0.85;
+    }
+
+    #update-banner-close {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 2px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
     /* ━━━ UTILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     .pb-bottom {
       height: 90px;
@@ -1718,6 +1788,12 @@
   </div>
 
   <div id="app">
+    <!-- 업데이트 배너 -->
+    <div id="update-banner">
+      <div id="update-banner-text">🆕 새 버전이 있어요!</div>
+      <button id="update-banner-btn" onclick="applyUpdate()">업데이트</button>
+      <button id="update-banner-close" onclick="dismissUpdate()">✕</button>
+    </div>
     <!-- ====== TOP NAV ====== -->
     <div id="topnav">
       <div class="topnav-logo">Lotto<span>Lens</span></div>
@@ -2514,80 +2590,29 @@
       sec.style.display = 'block';
 
       if (isLotto) {
-        // ── 로또 ──────────────────────────────────
-        const latestRound = lottoRounds[lottoRounds.length - 1];
-        const hasWin = !!latestRound;
-        const winNums = hasWin ? latestRound.numbers : null;
-        const winBonus = hasWin ? latestRound.bonus : null;
-
-        document.getElementById('purchase-list').innerHTML = sets.map((nums, i) => {
-          const prize = hasWin ? checkPrize(nums, winNums, winBonus) : null;
-          const isWin = prize && prize.rank > 0;
-          const matchNums = hasWin ? nums.filter(n => winNums.includes(n)) : [];
-          const matchBonus = hasWin ? nums.includes(winBonus) : false;
-          return `<div class="purchase-card ${isWin ? 'matched' : ''}">
+        document.getElementById('purchase-list').innerHTML = sets.map((nums, i) => `
+      <div class="purchase-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <span style="font-size:12px;font-weight:700;color:var(--text-2)">${i + 1}세트</span>
-          ${prize ? `<span class="prize-badge ${prize.cls}">${prize.label}</span>`
-              : `<span style="font-size:11px;color:var(--text-4)">추첨 대기 중</span>`}
+          <span style="font-size:11px;color:var(--text-4)">추첨 대기 중</span>
         </div>
         <div class="ball-row">
-          ${nums.map(n => {
-                const isMatch = matchNums.includes(n);
-                return `<div style="position:relative;display:inline-flex">
-              ${ball(n, 'sm')}
-              ${isMatch ? `<div style="position:absolute;inset:-2px;border-radius:50%;border:2.5px solid #16A34A;pointer-events:none"></div>` : ''}
-            </div>`;
-              }).join('')}
-          ${hasWin && matchBonus ? `<span class="ball-sep">+</span>
-            <div style="position:relative;display:inline-flex">
-              ${ball(winBonus, 'sm')}
-              <div style="position:absolute;inset:-2px;border-radius:50%;border:2.5px solid #F59E0B;pointer-events:none"></div>
-            </div>` : ''}
+          ${nums.map(n => ball(n, 'sm')).join('')}
         </div>
-        ${hasWin ? `<div style="margin-top:6px;font-size:10px;color:var(--text-4)">${latestRound.round}회 비교 · ${matchNums.length}개 일치${matchBonus ? ' +보너스' : ''}</div>` : ''}
-      </div>`;
-        }).join('');
+      </div>`).join('');
 
       } else {
-        // ── 연금복권 ──────────────────────────────
-        const latestRound = pensionRounds[pensionRounds.length - 1];
-        const hasWin = !!latestRound;
-        const winDigits = hasWin ? latestRound.digits : null;
-
-        document.getElementById('purchase-list').innerHTML = sets.map((set, i) => {
-          let prize = null, consecutive = 0;
-          if (hasWin) {
-            const result = checkPensionPrize(set.group, set.digits, latestRound.group, winDigits);
-            prize = result;
-            // consecutive 수 재계산 (표시용)
-            const mine = [set.group, ...set.digits];
-            const win = [latestRound.group, ...winDigits];
-            for (let k = 6; k >= 0; k--) {
-              if (mine[k] === win[k]) consecutive++;
-              else break;
-            }
-          }
-          const isWin = prize && prize.rank > 0;
-
-          return `<div class="purchase-card ${isWin ? 'matched' : ''}">
+        document.getElementById('purchase-list').innerHTML = sets.map((set, i) => `
+      <div class="purchase-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <span style="font-size:12px;font-weight:700;color:var(--text-2)">${i + 1}세트</span>
-          ${prize ? `<span class="prize-badge ${prize.cls}">${prize.label}</span>`
-              : `<span style="font-size:11px;color:var(--text-4)">추첨 대기 중</span>`}
+          <span style="font-size:11px;color:var(--text-4)">추첨 대기 중</span>
         </div>
         <div class="p-number-row">
-          <div class="p-group" style="${hasWin && set.group === latestRound.group && consecutive === 7 ? 'outline:2.5px solid #16A34A;outline-offset:1px;border-radius:6px' : ''}">${set.group}조</div>
-          ${set.digits.map((d, idx) => {
-                // 오른쪽 끝부터 consecutive개 하이라이트
-                const fromRight = 5 - idx; // idx=5가 오른쪽 끝(0-indexed)
-                const isMatch = hasWin && fromRight < consecutive;
-                return `<div class="p-digit" style="${isMatch ? 'outline:2.5px solid #16A34A;outline-offset:1px;border-radius:6px' : ''}">${d}</div>`;
-              }).join('')}
+          <div class="p-group">${set.group}조</div>
+          ${set.digits.map(d => `<div class="p-digit">${d}</div>`).join('')}
         </div>
-        ${hasWin ? `<div style="margin-top:6px;font-size:10px;color:var(--text-4)">${latestRound.round}회 비교 · 오른쪽부터 ${consecutive}자리 연속 일치</div>` : ''}
-      </div>`;
-        }).join('');
+      </div>`).join('');
       }
     }
 
@@ -2791,21 +2816,60 @@
       document.getElementById('modal-title').textContent = next + '회차 추가';
       const btn = document.getElementById('modal-confirm');
       btn.className = isLotto ? 'btn-confirm' : 'btn-confirm purple';
+
       if (isLotto) {
         document.getElementById('modal-sub').textContent = '1등 당첨 번호 6개와 보너스 번호를 입력하세요';
         let h = '<div class="input-label">당첨 번호 (1~45)</div><div class="input-row">';
-        for (let i = 1; i <= 6; i++) h += `<input class="num-input" id="ln${i}" type="number" min="1" max="45" placeholder="${i}번" inputmode="numeric">`;
-        h += '</div><div class="input-label">보너스 번호</div><div class="input-row"><input class="num-input" id="lbonus" type="number" min="1" max="45" placeholder="보너스" inputmode="numeric"></div>';
-        document.getElementById('modal-inputs').innerHTML = h;
-      } else {
-        document.getElementById('modal-sub').textContent = '조(1~5)와 6자리 번호(0~9)를 입력하세요';
-        let h = '<div class="input-label">조 (1~5)</div><div class="input-row"><input class="num-input pension-focus" id="pg" type="number" min="1" max="5" placeholder="조" inputmode="numeric" style="width:64px"></div>';
-        h += '<div class="input-label">6자리 번호 (각 0~9)</div><div class="input-row">';
-        for (let i = 1; i <= 6; i++) h += `<input class="num-input pension-focus" id="pd${i}" type="number" min="0" max="9" placeholder="${i}" inputmode="numeric" style="width:50px">`;
+        for (let i = 1; i <= 6; i++) {
+          const nextId = i < 6 ? `ln${i + 1}` : 'lbonus';
+          h += `<input class="num-input" id="ln${i}" type="text" inputmode="numeric"
+              placeholder="${i}번" maxlength="2"
+              oninput="lottoInputHandler(this,'${nextId}',45)">`;
+        }
+        h += '</div><div class="input-label">보너스 번호</div><div class="input-row">';
+        h += `<input class="num-input" id="lbonus" type="text" inputmode="numeric"
+            placeholder="보너스" maxlength="2"
+            oninput="lottoInputHandler(this,null,45)">`;
         h += '</div>';
         document.getElementById('modal-inputs').innerHTML = h;
+        setTimeout(() => document.getElementById('ln1')?.focus(), 100);
+
+      } else {
+        document.getElementById('modal-sub').textContent = '조(1~5)와 6자리 번호(0~9)를 입력하세요';
+        let h = '<div class="input-label">조 (1~5)</div><div class="input-row">';
+        h += `<input class="num-input pension-focus" id="pg" type="text" inputmode="numeric"
+            placeholder="조" maxlength="1" style="width:64px"
+            oninput="pensionInputHandler(this,'pd1',5)">`;
+        h += '</div><div class="input-label">6자리 번호 (각 0~9)</div><div class="input-row">';
+        for (let i = 1; i <= 6; i++) {
+          const nextId = i < 6 ? `pd${i + 1}` : null;
+          h += `<input class="num-input pension-focus" id="pd${i}" type="text" inputmode="numeric"
+              placeholder="${i}" maxlength="1" style="width:50px"
+              oninput="pensionInputHandler(this,${nextId ? `'${nextId}'` : 'null'},9)">`;
+        }
+        h += '</div>';
+        document.getElementById('modal-inputs').innerHTML = h;
+        setTimeout(() => document.getElementById('pg')?.focus(), 100);
       }
       document.getElementById('add-modal').classList.add('open');
+    }
+
+    /** 로또 입력 핸들러: 2자리 입력 완료 시 다음 필드로 이동 */
+    function lottoInputHandler(el, nextId, max) {
+      // 숫자 이외 제거
+      el.value = el.value.replace(/[^0-9]/g, '');
+      // 2자리 입력됐으면 바로 다음으로
+      if (el.value.length === 2 && nextId) {
+        document.getElementById(nextId)?.focus();
+      }
+    }
+
+    /** 연금복권 입력 핸들러: 1자리 입력 완료 시 다음 필드로 이동 */
+    function pensionInputHandler(el, nextId, max) {
+      el.value = el.value.replace(/[^0-9]/g, '');
+      if (el.value.length === 1 && nextId) {
+        document.getElementById(nextId)?.focus();
+      }
     }
     function closeModal() { document.getElementById('add-modal').classList.remove('open'); }
 
@@ -3417,10 +3481,68 @@
       setTimeout(() => t.classList.remove('show'), duration);
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  SERVICE WORKER — 자동 업데이트
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    let pendingSWRegistration = null; // 대기 중인 새 SW
+
+    function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => {
+          // 이미 대기 중인 새 SW가 있으면 즉시 배너 표시
+          if (reg.waiting) {
+            showUpdateBanner(reg.waiting);
+            return;
+          }
+
+          // 설치 중인 SW 감시
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // 새 버전 설치 완료 → 배너 표시
+                showUpdateBanner(newWorker);
+              }
+            });
+          });
+        })
+        .catch(err => console.warn('[SW] 등록 실패:', err));
+
+      // SW가 교체되면 자동 새로고침
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }
+
+    function showUpdateBanner(worker) {
+      pendingSWRegistration = worker;
+      const banner = document.getElementById('update-banner');
+      banner.classList.add('show');
+    }
+
+    function applyUpdate() {
+      if (!pendingSWRegistration) return;
+      // 새 SW에게 skipWaiting 메시지 전송 → controllerchange 이벤트 → 새로고침
+      pendingSWRegistration.postMessage({ type: 'SKIP_WAITING' });
+      document.getElementById('update-banner-btn').textContent = '적용 중...';
+    }
+
+    function dismissUpdate() {
+      document.getElementById('update-banner').classList.remove('show');
+    }
+
     document.getElementById('add-modal').addEventListener('click', e => { if (e.target === document.getElementById('add-modal')) closeModal(); });
     document.getElementById('token-modal').addEventListener('click', e => { if (e.target === document.getElementById('token-modal')) closeTokenModal(); });
     document.getElementById('prize-modal').addEventListener('click', e => { if (e.target === document.getElementById('prize-modal')) closePrizeModal(); });
-    window.addEventListener('load', init);
+    window.addEventListener('load', () => {
+      init();
+      registerServiceWorker();
+    });
   </script>
 </body>
 
