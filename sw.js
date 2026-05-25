@@ -4,7 +4,7 @@
 //  새 캐시로 교체 → 앱에 업데이트 알림
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-const CACHE_NAME = 'lottolens-v1';
+const CACHE_NAME = 'lottolens-v2';
 
 // 캐시할 파일 목록
 const ASSETS = [
